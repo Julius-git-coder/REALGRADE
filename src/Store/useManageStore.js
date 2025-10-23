@@ -802,6 +802,12 @@ const useManageStore = create(
         set((state) => ({
           attendance: state.attendance.filter((a) => a.id !== id),
         })),
+      // State for Team Messages
+      teamMessages: [],
+      addTeamMessage: (message) =>
+        set((state) => ({
+          teamMessages: [message, ...state.teamMessages],
+        })),
       // State for Programs
       programs: [],
       addProgram: (program) =>

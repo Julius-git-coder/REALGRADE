@@ -51,7 +51,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth"; // Import functions
 import { getDoc, doc } from "firebase/firestore";
 import { auth, db } from "../Service/FirebaseConfig"; // Import auth and db instances from FirebaseConfig
 
-import { listenToStudentMessages } from "../Service/FirebaseConfig";
+import { listenToStudentMessages, getStudentAdminInfo } from "../Service/FirebaseConfig";
 
 // ChatModal component (duplicated from Directory for global use in Dashboard)
 const ChatModal = ({ onClose, otherUser, currentUser }) => {
@@ -629,7 +629,7 @@ const WelcomeSection = ({
 };
 
 // Recent Updates Component - Dynamic summary from all pages
-const RecentUpdates = ({ setActiveTab }) => {
+const RecentUpdates = ({ setActiveTab, adminInfo }) => {
   const {
     announcements,
     assignments,
@@ -639,6 +639,7 @@ const RecentUpdates = ({ setActiveTab }) => {
     classMaterials,
     daysOfLearning,
     roadmapItems,
+    teamMessages,
   } = useManageStore();
 
   const studentId = 1;
@@ -707,6 +708,34 @@ const RecentUpdates = ({ setActiveTab }) => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* Team Messages */}
+      {adminInfo && (
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-white font-semibold text-lg mb-4 flex items-center space-x-2">
+            <MessageSquare className="w-5 h-5 text-yellow-500" />
+            <span>Team Messages</span>
+          </h3>
+          {teamMessages.length > 0 ? (
+            <div className="space-y-3">
+              {teamMessages.slice(0, 3).map((msg) => (
+                <div key={msg.id} className="text-sm border-b border-gray-700 pb-2">
+                  <p className="text-gray-300">{msg.message}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    From {msg.sender} - {new Date(msg.timestamp).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-2" />
+              <p className="text-gray-400">No team messages yet</p>
+              <p className="text-gray-500 text-sm">Messages from {adminInfo.adminName} will appear here</p>
+            </div>
+          )}
+        </div>
+      )}
+      
       {/* Recent Announcements */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
         <h3 className="text-white font-semibold text-lg mb-4 flex items-center space-x-2">
@@ -949,8 +978,42 @@ const PerformanceHub = ({ setActiveTab }) => {
   );
 };
 
+// Team Info Component
+const TeamInfo = ({ adminInfo }) => {
+  if (!adminInfo) {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
+        <h3 className="text-white font-semibold text-lg mb-4 flex items-center space-x-2">
+          <Users className="w-5 h-5 text-yellow-500" />
+          <span>Team Information</span>
+        </h3>
+        <p className="text-gray-400">Loading team information...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
+      <h3 className="text-white font-semibold text-lg mb-4 flex items-center space-x-2">
+        <Users className="w-5 h-5 text-yellow-500" />
+        <span>Team Information</span>
+      </h3>
+      <div className="flex items-center space-x-4">
+        <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center">
+          <User className="w-6 h-6 text-gray-900" />
+        </div>
+        <div>
+          <h4 className="text-white font-semibold">{adminInfo.adminName}</h4>
+          <p className="text-gray-400 text-sm">{adminInfo.adminEmail}</p>
+          <p className="text-gray-500 text-xs">Team ID: {adminInfo.adminId}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Dashboard Content Component - Now passes dynamic data to WelcomeSection
-const DashboardContent = ({ setActiveTab }) => {
+const DashboardContent = ({ setActiveTab, adminInfo }) => {
   const { profile } = useManageStore();
   const { roadmapItems } = useManageStore();
   const studentId = 1;
@@ -985,6 +1048,7 @@ const DashboardContent = ({ setActiveTab }) => {
 
   return (
     <div>
+      <TeamInfo adminInfo={adminInfo} />
       <WelcomeSection
         name={profile.name || "Julius Dagana"}
         currentWeekData={currentWeekData}
@@ -992,7 +1056,7 @@ const DashboardContent = ({ setActiveTab }) => {
         setActiveTab={setActiveTab}
       />
       <PerformanceHub setActiveTab={setActiveTab} />
-      <RecentUpdates setActiveTab={setActiveTab} />
+      <RecentUpdates setActiveTab={setActiveTab} adminInfo={adminInfo} />
     </div>
   );
 };
@@ -1005,6 +1069,7 @@ const Dashboard = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUid, setCurrentUid] = useState(null);
+  const [adminInfo, setAdminInfo] = useState(null);
   const markAsRead = useManageStore((state) => state.markAsRead);
   const markNotificationAsRead = useManageStore(
     (state) => state.markNotificationAsRead
@@ -1021,8 +1086,10 @@ const Dashboard = () => {
     roadmapItems,
     classMaterials,
     programs,
+    teamMessages,
     addNotification,
     addMessage,
+    addTeamMessage,
   } = useManageStore();
   const userId = 1;
   const currentUser = { id: 1, name: "Julius Dagana" };
@@ -1035,6 +1102,13 @@ const Dashboard = () => {
     });
     return unsubscribe;
   }, []);
+
+  // Load admin info for students
+  useEffect(() => {
+    if (currentUid) {
+      getStudentAdminInfo(currentUid).then(setAdminInfo);
+    }
+  }, [currentUid]);
 
   // Listen to messages
   useEffect(() => {
@@ -1055,6 +1129,15 @@ const Dashboard = () => {
               timestamp: msg.timestamp
                 ? msg.timestamp.toISOString()
                 : new Date().toISOString(),
+            });
+            // Also add to team messages for display
+            addTeamMessage({
+              id: msg.id,
+              message: msg.message,
+              timestamp: msg.timestamp
+                ? msg.timestamp.toISOString()
+                : new Date().toISOString(),
+              sender: "Admin",
             });
           }
         });
@@ -1082,7 +1165,7 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
-        return <DashboardContent setActiveTab={setActiveTab} />;
+        return <DashboardContent setActiveTab={setActiveTab} adminInfo={adminInfo} />;
       case "connect":
         return <CampusConnect />;
       case "announcements":

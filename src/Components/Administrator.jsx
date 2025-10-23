@@ -2413,6 +2413,7 @@ import {
   sendTeamMessage,
   sendPrivateMessage,
   getAdminStudents,
+  getAdminTeamStudents,
   listenToAdminMessages,
   auth,
   onAuthStateChanged,
@@ -2643,6 +2644,41 @@ const SessionsManagement = ({
   );
 };
 
+// Team Students Section
+const TeamStudents = ({ teamStudents }) => {
+  return (
+    <div className="mt-8">
+      <h2 className="text-white text-2xl font-bold mb-6">Team Students</h2>
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        {teamStudents.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {teamStudents.map((student) => (
+              <div key={student.uid} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center">
+                    <User className="w-5 h-5 text-gray-900" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-semibold">{student.name || "Unknown Student"}</h3>
+                    <p className="text-gray-400 text-sm">{student.email}</p>
+                    <p className="text-gray-500 text-xs">{student.cohort || "2024-B"}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Users className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-400">No students in your team yet</p>
+            <p className="text-gray-500 text-sm">Students will appear here when they sign up with your team ID</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // New Team Messaging Section
 const TeamMessaging = ({ adminUid }) => {
   const [message, setMessage] = useState("");
@@ -2706,16 +2742,12 @@ const TeamMessaging = ({ adminUid }) => {
 };
 
 // Fixed Private Messaging Section - Now filters full conversations (sent + received) with selected student
-const PrivateMessaging = ({ adminUid }) => {
-  const [students, setStudents] = useState([]);
+const PrivateMessaging = ({ adminUid, teamStudents }) => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [privateMessage, setPrivateMessage] = useState("");
   const [privateMessages, setPrivateMessages] = useState([]);
 
   useEffect(() => {
-    // Fetch students
-    getAdminStudents(adminUid).then(setStudents);
-
     // Listen to private messages (now includes sent and received)
     const unsubscribe = listenToAdminMessages(adminUid, null, (messages) => {
       console.log("Received private messages update:", messages); // Debug log
@@ -2751,15 +2783,15 @@ const PrivateMessaging = ({ adminUid }) => {
           <h3 className="text-white font-semibold mb-4">Select Student</h3>
           <select
             onChange={(e) => {
-              const student = students.find((s) => s.uid === e.target.value);
+              const student = teamStudents.find((s) => s.uid === e.target.value);
               setSelectedStudent(student);
             }}
             className="w-full bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2"
           >
             <option value="">Choose a student</option>
-            {students.map((student) => (
+            {teamStudents.map((student) => (
               <option key={student.uid} value={student.uid}>
-                {student.email}
+                {student.name || student.email}
               </option>
             ))}
           </select>
@@ -2767,7 +2799,7 @@ const PrivateMessaging = ({ adminUid }) => {
         {selectedStudent && (
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <h3 className="text-white font-semibold mb-4">
-              Message {selectedStudent.email}
+              Message {selectedStudent.name || selectedStudent.email}
             </h3>
             <form onSubmit={handleSendPrivateMessage}>
               <div className="flex space-x-2 mb-4">
@@ -3125,6 +3157,7 @@ const Administrator = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [studentCount, setStudentCount] = useState(0);
+  const [teamStudents, setTeamStudents] = useState([]);
   const markAsRead = useManageStore((state) => state.markAsRead);
   const { directory, conversations } = useManageStore();
   const userId = 2;
@@ -3141,10 +3174,11 @@ const Administrator = () => {
     return unsubscribe;
   }, []);
 
-  // Load student count
+  // Load student count and team students
   useEffect(() => {
     if (currentUid) {
       getStudentCount(currentUid).then(setStudentCount);
+      getAdminTeamStudents(currentUid).then(setTeamStudents);
     }
   }, [currentUid]);
 
@@ -4761,8 +4795,9 @@ const Administrator = () => {
         {/* New Team and Private Messaging Sections */}
         {currentUid && (
           <>
+            <TeamStudents teamStudents={teamStudents} />
             <TeamMessaging adminUid={currentUid} />
-            <PrivateMessaging adminUid={currentUid} />
+            <PrivateMessaging adminUid={currentUid} teamStudents={teamStudents} />
           </>
         )}
         {isChatOpen && selectedUser && (

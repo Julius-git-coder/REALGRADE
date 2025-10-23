@@ -109,6 +109,7 @@ async function studentSignup(email, password, adminId) {
     await setDoc(doc(db, "students", studentUid), {
       email: email,
       adminUid: adminUid,
+      adminId: adminId, // Store adminId for easy reference
       joinedAt: new Date(),
     });
     // Removed updateDoc here - It caused permission denial (student can't update admin doc)
@@ -268,7 +269,84 @@ async function sendPrivateMessage(senderUid, studentUid, message) {
 async function getAdminStudents(adminUid) {
   const studentsCol = collection(db, "admins", adminUid, "students");
   const snapshot = await getDocs(studentsCol);
-  return snapshot.docs.map((doc) => ({ uid: doc.data().uid, ...doc.data() }));
+  const students = [];
+  
+  for (const doc of snapshot.docs) {
+    const studentData = doc.data();
+    // Get full student profile from users collection
+    const userProfile = await getUserProfile(studentData.uid);
+    students.push({
+      uid: studentData.uid,
+      email: studentData.email,
+      joinedAt: studentData.joinedAt,
+      ...userProfile
+    });
+  }
+  
+  return students;
+}
+
+// Get admin's team students for store integration
+async function getAdminTeamStudents(adminUid) {
+  const studentsCol = collection(db, "admins", adminUid, "students");
+  const snapshot = await getDocs(studentsCol);
+  const students = [];
+  
+  for (const doc of snapshot.docs) {
+    const studentData = doc.data();
+    // Get full student profile from users collection
+    const userProfile = await getUserProfile(studentData.uid);
+    students.push({
+      id: studentData.uid, // Use uid as id for store compatibility
+      uid: studentData.uid,
+      name: userProfile?.name || "Unknown Student",
+      email: studentData.email,
+      role: "Student",
+      github: userProfile?.github || "",
+      cohort: userProfile?.cohort || "2024-B",
+      joinedAt: studentData.joinedAt,
+      ...userProfile
+    });
+  }
+  
+  return students;
+}
+
+// Get student's admin info
+async function getStudentAdminInfo(studentUid) {
+  try {
+    const studentDoc = await getDoc(doc(db, "students", studentUid));
+    if (!studentDoc.exists()) {
+      return null;
+    }
+    
+    const studentData = studentDoc.data();
+    const adminUid = studentData.adminUid;
+    
+    if (!adminUid) {
+      return null;
+    }
+    
+    // Get admin info
+    const adminDoc = await getDoc(doc(db, "admins", adminUid));
+    if (!adminDoc.exists()) {
+      return null;
+    }
+    
+    const adminData = adminDoc.data();
+    const adminProfile = await getUserProfile(adminUid);
+    
+    return {
+      adminUid,
+      adminId: adminData.adminId,
+      adminName: adminProfile?.name || "Admin",
+      adminEmail: adminData.email,
+      ...adminProfile
+    };
+  } catch (error) {
+    console.error("Error getting student admin info:", error);
+    return null;
+  }
 }
 
 // Fixed Listening to Messages for Students (Team + Private Sent and Received for full conversations)
@@ -416,6 +494,8 @@ export {
   sendTeamMessage,
   sendPrivateMessage,
   getAdminStudents,
+  getAdminTeamStudents,
+  getStudentAdminInfo,
   listenToStudentMessages,
   listenToAdminMessages,
   onAuthStateChanged,
