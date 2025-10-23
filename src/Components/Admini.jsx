@@ -8,6 +8,7 @@ import {
   Settings,
   X,
   TrendingUp,
+  MessageSquare,
 } from "lucide-react";
 
 const Admini = ({
@@ -231,6 +232,16 @@ const Admini = ({
           >
             Programs
           </button>
+          <button
+            onClick={() => setActiveTab("team-communication")}
+            className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap ${
+              activeTab === "team-communication"
+                ? "bg-yellow-500 text-gray-900"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Team Communication
+          </button>
         </div>
       </div>
 
@@ -380,6 +391,32 @@ const Admini = ({
           >
             Add Announcement
           </button>
+        </div>
+      )}
+
+      {/* Team Communication Tab */}
+      {activeTab === "team-communication" && (
+        <div className="space-y-6">
+          <h3 className="text-white text-lg font-semibold mb-4 flex items-center space-x-2">
+            <MessageSquare className="w-5 h-5 text-yellow-500" />
+            <span>Team Communication</span>
+          </h3>
+          <div className="text-gray-400 text-center py-8">
+            <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+            <p className="text-lg mb-2">Team Communication Features</p>
+            <p className="text-sm mb-4">
+              Use the team messaging and private messaging features below to communicate with your students.
+            </p>
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <p className="text-yellow-500 text-sm font-semibold mb-2">Available Features:</p>
+              <ul className="text-sm text-gray-300 space-y-1">
+                <li>• Send messages to all students in your team</li>
+                <li>• Send private messages to individual students</li>
+                <li>• View message history and conversations</li>
+                <li>• Real-time message updates</li>
+              </ul>
+            </div>
+          </div>
         </div>
       )}
     </>

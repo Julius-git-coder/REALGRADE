@@ -4758,8 +4758,8 @@ const Administrator = () => {
             </div>
           </div>
         </div>
-        {/* New Team and Private Messaging Sections */}
-        {currentUid && (
+        {/* Team Communication Tab Content */}
+        {activeTab === "team-communication" && currentUid && (
           <>
             <TeamMessaging adminUid={currentUid} />
             <PrivateMessaging adminUid={currentUid} />
