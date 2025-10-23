@@ -231,6 +231,16 @@ const Admini = ({
           >
             Programs
           </button>
+          <button
+            onClick={() => setActiveTab("team")}
+            className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap ${
+              activeTab === "team"
+                ? "bg-yellow-500 text-gray-900"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Team
+          </button>
         </div>
       </div>
 
@@ -380,6 +390,21 @@ const Admini = ({
           >
             Add Announcement
           </button>
+        </div>
+      )}
+
+      {/* Team Tab - Placeholder for team management */}
+      {activeTab === "team" && (
+        <div className="space-y-6">
+          <div className="text-center py-8">
+            <h3 className="text-white text-xl font-semibold mb-4">Team Management</h3>
+            <p className="text-gray-400 mb-6">
+              Detailed team management features are available in the main Administrator view below.
+            </p>
+            <p className="text-gray-500 text-sm">
+              Scroll down to see Team Management, Team Messaging, and Private Messaging sections.
+            </p>
+          </div>
         </div>
       )}
     </>
