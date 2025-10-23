@@ -268,7 +268,54 @@ async function sendPrivateMessage(senderUid, studentUid, message) {
 async function getAdminStudents(adminUid) {
   const studentsCol = collection(db, "admins", adminUid, "students");
   const snapshot = await getDocs(studentsCol);
-  return snapshot.docs.map((doc) => ({ uid: doc.data().uid, ...doc.data() }));
+  const students = snapshot.docs.map((doc) => ({ uid: doc.data().uid, ...doc.data() }));
+  
+  // Enrich with profile data
+  const enrichedStudents = await Promise.all(
+    students.map(async (student) => {
+      try {
+        const profile = await getUserProfile(student.uid);
+        return {
+          ...student,
+          name: profile?.name || student.email,
+          phone: profile?.phone || "",
+          github: profile?.github || "",
+        };
+      } catch (error) {
+        console.error("Error enriching student profile:", error);
+        return student;
+      }
+    })
+  );
+  
+  return enrichedStudents;
+}
+
+// Get admin info for a student
+async function getStudentAdmin(studentUid) {
+  try {
+    const studentDoc = await getDoc(doc(db, "students", studentUid));
+    if (!studentDoc.exists()) {
+      return null;
+    }
+    const studentData = studentDoc.data();
+    const adminUid = studentData.adminUid;
+    
+    // Get admin profile
+    const adminProfile = await getUserProfile(adminUid);
+    const adminDocRef = await getDoc(doc(db, "admins", adminUid));
+    const adminData = adminDocRef.data();
+    
+    return {
+      uid: adminUid,
+      name: adminProfile?.name || "Admin",
+      email: adminData?.email || adminProfile?.email || "",
+      adminId: adminData?.adminId || "",
+    };
+  } catch (error) {
+    console.error("Error getting student admin:", error);
+    return null;
+  }
 }
 
 // Fixed Listening to Messages for Students (Team + Private Sent and Received for full conversations)
@@ -416,10 +463,13 @@ export {
   sendTeamMessage,
   sendPrivateMessage,
   getAdminStudents,
+  getStudentAdmin,
   listenToStudentMessages,
   listenToAdminMessages,
   onAuthStateChanged,
   signOut,
   getUserProfile,
   saveUserProfile,
+  getDoc,
+  doc,
 };

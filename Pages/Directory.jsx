@@ -13,6 +13,15 @@ import {
   X,
 } from "lucide-react";
 import useManageStore from "../src/Store/useManageStore";
+import {
+  auth,
+  onAuthStateChanged,
+  getAdminStudents,
+  getUserProfile,
+  db,
+  getDoc,
+  doc,
+} from "../Service/FirebaseConfig";
 
 // Simple Chat Modal Component - Full screen
 const ChatModal = ({ onClose, otherUser, currentUser }) => {
@@ -137,6 +146,10 @@ const Directory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [currentUid, setCurrentUid] = useState(null);
+  const [currentUserRole, setCurrentUserRole] = useState(null);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const {
     directory: storeDirectory,
     friendRequests,
@@ -144,6 +157,69 @@ const Directory = () => {
   } = useManageStore();
 
   const currentUser = { id: 1, name: "Julius Dagana" };
+
+  // Load current user and their team
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUid(user.uid);
+        try {
+          // Check if user is admin
+          const adminDoc = await getDoc(doc(db, "admins", user.uid));
+          if (adminDoc.exists()) {
+            setCurrentUserRole("admin");
+            // Load admin's team students
+            const students = await getAdminStudents(user.uid);
+            const studentsWithProfiles = await Promise.all(
+              students.map(async (student) => {
+                const profile = await getUserProfile(student.uid);
+                return {
+                  id: student.uid,
+                  name: profile?.name || student.email,
+                  email: student.email,
+                  role: "Student",
+                  github: profile?.github || "",
+                  cohort: profile?.cohort || "2024-B",
+                  uid: student.uid,
+                };
+              })
+            );
+            setTeamMembers(studentsWithProfiles);
+          } else {
+            // Check if user is student
+            const studentDoc = await getDoc(doc(db, "students", user.uid));
+            if (studentDoc.exists()) {
+              setCurrentUserRole("student");
+              const studentData = studentDoc.data();
+              const adminUid = studentData.adminUid;
+              // Load admin profile
+              const adminProfile = await getUserProfile(adminUid);
+              const adminDocData = await getDoc(doc(db, "admins", adminUid));
+              const adminData = adminDocData.data();
+              setTeamMembers([
+                {
+                  id: adminUid,
+                  name: adminProfile?.name || "Admin",
+                  email: adminData?.email || adminProfile?.email || "admin@gradea.com",
+                  role: "Administrator",
+                  github: adminProfile?.github || "admin",
+                  cohort: "Admin Team",
+                  uid: adminUid,
+                },
+              ]);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading team members:", error);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   // FIXED FALLBACK: Trigger if empty array or null/undefined
   const fallbackDirectory = [
@@ -180,10 +256,9 @@ const Directory = () => {
       cohort: "2024-A",
     },
   ];
-  const directory =
-    storeDirectory && storeDirectory.length > 0
-      ? storeDirectory
-      : fallbackDirectory;
+  // Combine team members with fallback directory
+  const directory = teamMembers.length > 0 ? teamMembers : 
+    (storeDirectory && storeDirectory.length > 0 ? storeDirectory : fallbackDirectory);
 
   // Memoized derived state
   const friends = useMemo(
@@ -320,10 +395,17 @@ const Directory = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-white text-3xl font-bold">Directory</h1>
+          <h1 className="text-white text-3xl font-bold">
+            {currentUserRole === "admin" ? "My Team Directory" : "Directory"}
+          </h1>
           <p className="text-gray-400 mt-2">
-            Connect with classmates and instructors ({directory.length} total
-            users)
+            {loading ? "Loading..." :
+              currentUserRole === "admin"
+                ? `Your team members (${directory.length} students)`
+                : currentUserRole === "student"
+                ? `Your admin and team (${directory.length} members)`
+                : `Connect with classmates and instructors (${directory.length} total users)`
+            }
           </p>
         </div>
         <button
