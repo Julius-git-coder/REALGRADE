@@ -151,6 +151,19 @@ const useManageStore = create(
           get().addNotification(newNotif);
         }
       },
+      // Replace conversation thread between two users to avoid duplicates
+      setConversation: (user1Id, user2Id, messagesArray) => {
+        const key = [
+          Math.min(user1Id, user2Id),
+          Math.max(user1Id, user2Id),
+        ].join("-");
+        set((state) => ({
+          conversations: {
+            ...state.conversations,
+            [key]: Array.isArray(messagesArray) ? messagesArray : [],
+          },
+        }));
+      },
       // Notifications state
       notifications: [],
       addNotification: (notification) =>
