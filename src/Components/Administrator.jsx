@@ -2705,6 +2705,77 @@ const TeamMessaging = ({ adminUid }) => {
   );
 };
 
+// Team Students Display Section - Shows all students on admin's team
+const TeamStudentsDisplay = ({ adminUid }) => {
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (adminUid) {
+      setLoading(true);
+      getAdminStudents(adminUid)
+        .then((studentList) => {
+          console.log("Loaded team students:", studentList);
+          setStudents(studentList);
+        })
+        .catch((error) => {
+          console.error("Error loading team students:", error);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [adminUid]);
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-white text-2xl font-bold mb-6">My Team Students</h2>
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        {loading ? (
+          <p className="text-gray-400">Loading students...</p>
+        ) : students.length === 0 ? (
+          <div className="text-center py-8">
+            <Users className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-400 text-lg">No students have joined your team yet</p>
+            <p className="text-gray-500 text-sm mt-2">
+              Share your Team ID with students so they can join
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {students.map((student, index) => (
+              <div
+                key={student.uid || index}
+                className="bg-gray-900 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+              >
+                <div className="flex items-start space-x-3">
+                  <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-white font-semibold truncate">
+                      {student.name || "Student"}
+                    </h3>
+                    <div className="flex items-center space-x-1 text-sm text-gray-400 mt-1">
+                      <Mail className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{student.email}</span>
+                    </div>
+                    {student.joinedAt && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Joined: {new Date(student.joinedAt.seconds * 1000).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Fixed Private Messaging Section - Now filters full conversations (sent + received) with selected student
 const PrivateMessaging = ({ adminUid }) => {
   const [students, setStudents] = useState([]);
@@ -2786,15 +2857,32 @@ const PrivateMessaging = ({ adminUid }) => {
                 </button>
               </div>
             </form>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {filteredMessages.map((msg) => (
-                <div key={msg.id} className="text-sm text-gray-300 flex justify-between">
-                  <span>{msg.message}</span>
-                  <span>{msg.timestamp?.toDate().toLocaleString()}</span>
-                </div>
-              ))}
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {filteredMessages.map((msg) => {
+                const isFromAdmin = msg.senderUid === adminUid;
+                return (
+                  <div 
+                    key={msg.id} 
+                    className={`text-sm p-3 rounded-lg ${
+                      isFromAdmin 
+                        ? "bg-yellow-500 bg-opacity-20 ml-8" 
+                        : "bg-blue-500 bg-opacity-20 mr-8"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-semibold text-white">
+                        {isFromAdmin ? "You" : selectedStudent.email}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {msg.timestamp?.toDate().toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-gray-300">{msg.message}</p>
+                  </div>
+                );
+              })}
               {filteredMessages.length === 0 && (
-                <p className="text-gray-500 text-sm">No messages yet.</p>
+                <p className="text-gray-500 text-sm text-center py-4">No messages yet. Start a conversation!</p>
               )}
             </div>
           </div>
@@ -4758,9 +4846,10 @@ const Administrator = () => {
             </div>
           </div>
         </div>
-        {/* New Team and Private Messaging Sections */}
+        {/* New Team Students, Team Messaging and Private Messaging Sections */}
         {currentUid && (
           <>
+            <TeamStudentsDisplay adminUid={currentUid} />
             <TeamMessaging adminUid={currentUid} />
             <PrivateMessaging adminUid={currentUid} />
           </>
