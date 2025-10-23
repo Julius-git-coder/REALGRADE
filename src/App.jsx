@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Home,
   Users,
@@ -1005,6 +1005,8 @@ const Dashboard = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUid, setCurrentUid] = useState(null);
+  const processedTeamMessageIds = useRef(new Set());
+  const processedPrivateMessageIds = useRef(new Set());
   const markAsRead = useManageStore((state) => state.markAsRead);
   const markNotificationAsRead = useManageStore(
     (state) => state.markNotificationAsRead
@@ -1044,24 +1046,28 @@ const Dashboard = () => {
       currentUid,
       (teamMessages) => {
         teamMessages.forEach((msg) => {
-          if (msg.isTeamMessage) {
-            addNotification({
-              id: `team-${msg.id}`,
-              userId: userId,
-              type: "team_message",
-              messageId: msg.id,
-              message: msg.message,
-              read: false,
-              timestamp: msg.timestamp
-                ? msg.timestamp.toISOString()
-                : new Date().toISOString(),
-            });
-          }
+          if (!msg.isTeamMessage) return;
+          if (processedTeamMessageIds.current.has(msg.id)) return;
+          processedTeamMessageIds.current.add(msg.id);
+          addNotification({
+            id: `team-${msg.id}`,
+            userId: userId,
+            type: "team_message",
+            messageId: msg.id,
+            message: msg.message,
+            read: false,
+            timestamp: msg.timestamp?.toDate
+              ? msg.timestamp.toDate().toISOString()
+              : new Date().toISOString(),
+          });
         });
       },
       (privateMessages) => {
         privateMessages.forEach((msg) => {
-          // Messages from admin
+          // Only process incoming messages (from admin to this student)
+          if (msg.senderUid === currentUid) return;
+          if (processedPrivateMessageIds.current.has(msg.id)) return;
+          processedPrivateMessageIds.current.add(msg.id);
           addMessage(userId, adminId, adminId, msg.message);
         });
       }
