@@ -2416,6 +2416,7 @@ import {
   listenToAdminMessages,
   auth,
   onAuthStateChanged,
+  getUserProfile,
 } from "../../Service/FirebaseConfig"; // Import Firebase functions, including auth and onAuthStateChanged
 
 // Updated Sessions Management Section Component
@@ -2705,8 +2706,346 @@ const TeamMessaging = ({ adminUid }) => {
   );
 };
 
-// Fixed Private Messaging Section - Now filters full conversations (sent + received) with selected student
+// Team Management Section - Shows detailed student list with profiles
+const TeamManagement = ({ adminUid }) => {
+  const [students, setStudents] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [studentProfiles, setStudentProfiles] = useState({});
+
+  useEffect(() => {
+    // Fetch students and their profiles
+    const fetchStudentsAndProfiles = async () => {
+      try {
+        const studentList = await getAdminStudents(adminUid);
+        setStudents(studentList);
+        
+        // Fetch profiles for each student
+        const profiles = {};
+        for (const student of studentList) {
+          try {
+            const profile = await getUserProfile(student.uid);
+            profiles[student.uid] = profile;
+          } catch (error) {
+            console.error(`Error fetching profile for ${student.uid}:`, error);
+            profiles[student.uid] = {
+              name: student.email.split('@')[0],
+              email: student.email,
+              phone: 'Not provided',
+              joinedAt: student.joinedAt
+            };
+          }
+        }
+        setStudentProfiles(profiles);
+      } catch (error) {
+        console.error('Error fetching students:', error);
+      }
+    };
+
+    if (adminUid) {
+      fetchStudentsAndProfiles();
+    }
+  }, [adminUid]);
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-white text-2xl font-bold mb-6">Team Management</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Student List */}
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-white font-semibold mb-4">My Students ({students.length})</h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {students.length > 0 ? (
+              students.map((student) => {
+                const profile = studentProfiles[student.uid] || {};
+                return (
+                  <div
+                    key={student.uid}
+                    className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+                      selectedStudent?.uid === student.uid
+                        ? 'bg-yellow-500 bg-opacity-20 border-yellow-500'
+                        : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                    }`}
+                    onClick={() => setSelectedStudent(student)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-gray-300" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white font-medium">
+                          {profile.name || student.email.split('@')[0]}
+                        </p>
+                        <p className="text-gray-400 text-sm">{student.email}</p>
+                        <p className="text-gray-500 text-xs">
+                          Joined: {student.joinedAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-gray-400">No students in your team yet.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Student Details */}
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-white font-semibold mb-4">Student Details</h3>
+          {selectedStudent ? (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center">
+                  <User className="w-8 h-8 text-gray-300" />
+                </div>
+                <div>
+                  <h4 className="text-white text-lg font-semibold">
+                    {studentProfiles[selectedStudent.uid]?.name || selectedStudent.email.split('@')[0]}
+                  </h4>
+                  <p className="text-gray-400">{selectedStudent.email}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-4">
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <h5 className="text-white font-medium mb-2">Contact Information</h5>
+                  <p className="text-gray-300 text-sm">
+                    <strong>Email:</strong> {selectedStudent.email}
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    <strong>Phone:</strong> {studentProfiles[selectedStudent.uid]?.phone || 'Not provided'}
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    <strong>Location:</strong> {studentProfiles[selectedStudent.uid]?.location || 'Not provided'}
+                  </p>
+                </div>
+                
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <h5 className="text-white font-medium mb-2">Academic Information</h5>
+                  <p className="text-gray-300 text-sm">
+                    <strong>Student ID:</strong> {studentProfiles[selectedStudent.uid]?.studentId || 'Not provided'}
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    <strong>Cohort:</strong> {studentProfiles[selectedStudent.uid]?.cohort || 'Not assigned'}
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    <strong>Joined:</strong> {selectedStudent.joinedAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}
+                  </p>
+                </div>
+
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <h5 className="text-white font-medium mb-2">Social Links</h5>
+                  <p className="text-gray-300 text-sm">
+                    <strong>GitHub:</strong> {studentProfiles[selectedStudent.uid]?.github || 'Not provided'}
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    <strong>LinkedIn:</strong> {studentProfiles[selectedStudent.uid]?.linkedin || 'Not provided'}
+                  </p>
+                </div>
+
+                {studentProfiles[selectedStudent.uid]?.bio && (
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h5 className="text-white font-medium mb-2">Bio</h5>
+                    <p className="text-gray-300 text-sm">
+                      {studentProfiles[selectedStudent.uid].bio}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-400">Select a student to view their details.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Enhanced Private Messaging Section - Now shows student names and better UI
 const PrivateMessaging = ({ adminUid }) => {
+  const [students, setStudents] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [privateMessage, setPrivateMessage] = useState("");
+  const [privateMessages, setPrivateMessages] = useState([]);
+  const [studentProfiles, setStudentProfiles] = useState({});
+
+  useEffect(() => {
+    // Fetch students and their profiles
+    const fetchStudentsAndProfiles = async () => {
+      try {
+        const studentList = await getAdminStudents(adminUid);
+        setStudents(studentList);
+        
+        // Fetch profiles for each student
+        const profiles = {};
+        for (const student of studentList) {
+          try {
+            const profile = await getUserProfile(student.uid);
+            profiles[student.uid] = profile;
+          } catch (error) {
+            console.error(`Error fetching profile for ${student.uid}:`, error);
+            profiles[student.uid] = {
+              name: student.email.split('@')[0],
+              email: student.email
+            };
+          }
+        }
+        setStudentProfiles(profiles);
+      } catch (error) {
+        console.error('Error fetching students:', error);
+      }
+    };
+
+    if (adminUid) {
+      fetchStudentsAndProfiles();
+    }
+
+    // Listen to private messages (now includes sent and received)
+    const unsubscribe = listenToAdminMessages(adminUid, null, (messages) => {
+      console.log("Received private messages update:", messages); // Debug log
+      setPrivateMessages(messages);
+    });
+    return unsubscribe;
+  }, [adminUid]);
+
+  const handleSendPrivateMessage = async (e) => {
+    e.preventDefault();
+    if (privateMessage.trim() && selectedStudent) {
+      console.log("Sending private message to:", selectedStudent.uid); // Debug log
+      await sendPrivateMessage(adminUid, selectedStudent.uid, privateMessage);
+      setPrivateMessage("");
+    } else {
+      alert("Please select a student and enter a message.");
+    }
+  };
+
+  // Fixed filter: Show full conversation (sent to student OR received from student)
+  const filteredMessages = selectedStudent
+    ? privateMessages.filter((msg) =>
+        (msg.senderUid === adminUid && msg.receiverUid === selectedStudent.uid) ||
+        (msg.senderUid === selectedStudent.uid && msg.receiverUid === adminUid)
+      )
+    : [];
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-white text-2xl font-bold mb-6">Private Messaging</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Student List */}
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-white font-semibold mb-4">Select Student</h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {students.map((student) => {
+              const profile = studentProfiles[student.uid] || {};
+              return (
+                <div
+                  key={student.uid}
+                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                    selectedStudent?.uid === student.uid
+                      ? 'bg-blue-500 bg-opacity-20 border border-blue-500'
+                      : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
+                  onClick={() => setSelectedStudent(student)}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-gray-300" />
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-medium">
+                        {profile.name || student.email.split('@')[0]}
+                      </p>
+                      <p className="text-gray-400 text-xs">{student.email}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Chat Interface */}
+        {selectedStudent ? (
+          <div className="lg:col-span-2 bg-gray-800 rounded-lg border border-gray-700 flex flex-col">
+            {/* Chat Header */}
+            <div className="p-4 border-b border-gray-700">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-gray-300" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">
+                    {studentProfiles[selectedStudent.uid]?.name || selectedStudent.email.split('@')[0]}
+                  </h3>
+                  <p className="text-gray-400 text-sm">{selectedStudent.email}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 p-4 space-y-3 max-h-80 overflow-y-auto">
+              {filteredMessages.length > 0 ? (
+                filteredMessages
+                  .sort((a, b) => (a.timestamp?.toDate() || new Date(0)) - (b.timestamp?.toDate() || new Date(0)))
+                  .map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.senderUid === adminUid ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          msg.senderUid === adminUid
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-700 text-gray-300'
+                        }`}
+                      >
+                        <p className="text-sm">{msg.message}</p>
+                        <p className={`text-xs mt-1 ${
+                          msg.senderUid === adminUid ? 'text-blue-100' : 'text-gray-500'
+                        }`}>
+                          {msg.timestamp?.toDate().toLocaleTimeString() || 'Now'}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <p className="text-gray-400 text-center">No messages yet. Start the conversation!</p>
+              )}
+            </div>
+
+            {/* Message Input */}
+            <form onSubmit={handleSendPrivateMessage} className="p-4 border-t border-gray-700">
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={privateMessage}
+                  onChange={(e) => setPrivateMessage(e.target.value)}
+                  placeholder="Type your message..."
+                  className="flex-1 bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-2 outline-none focus:border-blue-500"
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
+                >
+                  Send
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="lg:col-span-2 bg-gray-800 rounded-lg p-6 border border-gray-700 flex items-center justify-center">
+            <p className="text-gray-400">Select a student to start messaging</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Keep the original structure but with enhanced functionality
+const OriginalPrivateMessaging = ({ adminUid }) => {
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [privateMessage, setPrivateMessage] = useState("");
@@ -2745,7 +3084,7 @@ const PrivateMessaging = ({ adminUid }) => {
 
   return (
     <div className="mt-8">
-      <h2 className="text-white text-2xl font-bold mb-6">Private Messaging</h2>
+      <h2 className="text-white text-2xl font-bold mb-6">Private Messaging (Legacy)</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
           <h3 className="text-white font-semibold mb-4">Select Student</h3>
@@ -4758,9 +5097,10 @@ const Administrator = () => {
             </div>
           </div>
         </div>
-        {/* Team Communication Tab Content */}
-        {activeTab === "team-communication" && currentUid && (
+        {/* New Team Management and Messaging Sections */}
+        {currentUid && (
           <>
+            <TeamManagement adminUid={currentUid} />
             <TeamMessaging adminUid={currentUid} />
             <PrivateMessaging adminUid={currentUid} />
           </>
