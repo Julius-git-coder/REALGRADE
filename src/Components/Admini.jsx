@@ -8,6 +8,7 @@ import {
   Settings,
   X,
   TrendingUp,
+  MessageSquare,
 } from "lucide-react";
 
 const Admini = ({
