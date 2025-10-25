@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Home,
   Users,
@@ -51,10 +51,10 @@ import { onAuthStateChanged, signOut } from "firebase/auth"; // Import functions
 import { getDoc, doc } from "firebase/firestore";
 import { auth, db } from "../Service/FirebaseConfig"; // Import auth and db instances from FirebaseConfig
 
-import { listenToStudentMessages } from "../Service/FirebaseConfig";
+import { listenToStudentMessages, sendPrivateMessage } from "../Service/FirebaseConfig";
 
 // ChatModal component (duplicated from Directory for global use in Dashboard)
-const ChatModal = ({ onClose, otherUser, currentUser }) => {
+const ChatModal = ({ onClose, otherUser, currentUser, onSendMessage }) => {
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const { conversations, addMessage } = useManageStore();
@@ -89,6 +89,15 @@ const ChatModal = ({ onClose, otherUser, currentUser }) => {
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (newMessage.trim()) {
+      // Send via callback (e.g., Firebase) if provided
+      if (typeof onSendMessage === "function") {
+        try {
+          onSendMessage(newMessage);
+        } catch (_) {
+          // ignore send errors here; UI will still optimistically update
+        }
+      }
+      // Optimistic local update
       addMessage(currentUser.id, otherUser.id, currentUser.id, newMessage);
       setNewMessage("");
     }
@@ -1005,6 +1014,8 @@ const Dashboard = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUid, setCurrentUid] = useState(null);
+  const [adminUid, setAdminUid] = useState(null);
+  const lastAdminMsgTsRef = useRef(null);
   const markAsRead = useManageStore((state) => state.markAsRead);
   const markNotificationAsRead = useManageStore(
     (state) => state.markNotificationAsRead
@@ -1023,6 +1034,7 @@ const Dashboard = () => {
     programs,
     addNotification,
     addMessage,
+    setConversation,
   } = useManageStore();
   const userId = 1;
   const currentUser = { id: 1, name: "Julius Dagana" };
@@ -1036,7 +1048,23 @@ const Dashboard = () => {
     return unsubscribe;
   }, []);
 
-  // Listen to messages
+  // Fetch this student's adminUid for routing private messages
+  useEffect(() => {
+    if (!currentUid) {
+      setAdminUid(null);
+      return;
+    }
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "students", currentUid));
+        setAdminUid(snap.exists() ? snap.data().adminUid || null : null);
+      } catch (_) {
+        setAdminUid(null);
+      }
+    })();
+  }, [currentUid]);
+
+  // Listen to messages (team + private with student's own admin)
   useEffect(() => {
     if (!currentUid) return;
 
@@ -1052,23 +1080,57 @@ const Dashboard = () => {
               messageId: msg.id,
               message: msg.message,
               read: false,
-              timestamp: msg.timestamp
-                ? msg.timestamp.toISOString()
+              timestamp: msg.timestamp?.toDate
+                ? msg.timestamp.toDate().toISOString()
                 : new Date().toISOString(),
             });
           }
         });
       },
       (privateMessages) => {
-        privateMessages.forEach((msg) => {
-          // Messages from admin
-          addMessage(userId, adminId, adminId, msg.message);
-        });
+        // Map entire conversation and replace to avoid duplicates
+        const mapped = privateMessages
+          .map((m) => ({
+            id: m.id,
+            senderId: m.senderUid === currentUid ? userId : adminId,
+            text: m.message,
+            timestamp: m.timestamp?.toDate
+              ? m.timestamp.toDate().toISOString()
+              : new Date(0).toISOString(),
+          }))
+          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        setConversation(userId, adminId, mapped);
+
+        // Notify only on new incoming admin message
+        const latestAdmin = privateMessages
+          .filter((m) => m.senderUid !== currentUid && m.timestamp?.toDate)
+          .sort(
+            (a, b) => a.timestamp.toDate() - b.timestamp.toDate()
+          )
+          .slice(-1)[0];
+        if (latestAdmin) {
+          const tsMs = latestAdmin.timestamp.toDate().getTime();
+          if (lastAdminMsgTsRef.current == null) {
+            // Initialize without notifying on historical messages
+            lastAdminMsgTsRef.current = tsMs;
+          } else if (tsMs > lastAdminMsgTsRef.current) {
+            lastAdminMsgTsRef.current = tsMs;
+            addNotification({
+              id: Date.now(),
+              userId,
+              type: "message",
+              fromUserId: adminId,
+              messageId: latestAdmin.id,
+              read: false,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
       }
     );
 
     return unsubscribe;
-  }, [currentUid, userId, adminId, addNotification, addMessage]);
+  }, [currentUid, userId, adminId, addNotification, setConversation]);
 
   const handleBellClick = () => {
     setIsNotificationOpen(true);
@@ -1171,6 +1233,15 @@ const Dashboard = () => {
           onClose={() => setIsChatOpen(false)}
           otherUser={selectedUser}
           currentUser={currentUser}
+          onSendMessage={async (text) => {
+            try {
+              if (!currentUid || !adminUid) return;
+              const recipientUid = selectedUser.id === adminId ? adminUid : null;
+              if (recipientUid) {
+                await sendPrivateMessage(currentUid, recipientUid, text);
+              }
+            } catch (_) {}
+          }}
         />
       )}
 
