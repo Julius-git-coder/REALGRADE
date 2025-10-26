@@ -1517,3 +1517,114 @@ const Administrator = () => {
 
 export default Administrator;
 
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users: Authenticated create for signup, own reads, admin full access
+    match /users/{userId} {
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['uid', 'email', 'role', 'teamId', 'createdAt'])
+        && request.resource.data.role in ['admin', 'student'];
+      
+      allow get: if request.auth != null
+        && (request.auth.uid == userId
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      allow list: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      allow update: if request.auth != null
+        && (request.auth.uid == userId
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      
+      allow delete: if false;
+    }
+    
+    // Teams: Unauth get for existence check, admin creates/updates
+    match /teams/{teamId} {
+      allow get: if true;
+      allow list: if false;
+      
+      allow create: if request.auth != null
+        && request.resource.data.adminId == request.auth.uid
+        && request.resource.data.keys().hasAll(['teamId', 'adminId', 'isActive', 'createdAt'])
+        && request.resource.data.isActive == true;
+      
+      allow update: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      allow delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Announcements: Team-scoped with targeted recipients support
+    match /announcements/{announcementId} {
+      allow create: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && request.resource.data.keys().hasAll(['teamId', 'adminId', 'recipients'])
+        && (request.resource.data.recipients is list || request.resource.data.recipients == 'all');
+      
+      allow read: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == resource.data.teamId
+        && (
+          // Admin can read all announcements in their team
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          // Student can read if sent to all or their ID is in recipients list
+          || resource.data.recipients == 'all'
+          || request.auth.uid in resource.data.recipients
+        );
+      
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && resource.data.teamId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
+    }
+    
+    // Assignments: Similar to announcements with targeted recipients
+    match /assignments/{assignmentId} {
+      allow create: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && request.resource.data.keys().hasAll(['teamId', 'adminId', 'recipients'])
+        && (request.resource.data.recipients is list || request.resource.data.recipients == 'all');
+      
+      allow read: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == resource.data.teamId
+        && (
+          // Admin can read all assignments in their team
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          // Student can read if sent to all or their ID is in recipients list
+          || resource.data.recipients == 'all'
+          || request.auth.uid in resource.data.recipients
+        );
+      
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && resource.data.teamId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
+    }
+    
+    // Attendance: Admin creates, team members read
+    match /attendance/{recordId} {
+      allow create: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      allow read: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == resource.data.teamId;
+      
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && resource.data.teamId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId;
+    }
+    
+    // Recursive for any team subcollections
+    match /teams/{teamId}/{document=**} {
+      allow read, write: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == teamId
+        && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+            || document == 'members/' + request.auth.uid);
+    }
+  }
+}
